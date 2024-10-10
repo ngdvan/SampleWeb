@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Spline Curves with Draggable Pivot Points</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+        }
+        canvas {
+            border: 1px solid black;
+        }
+        button, input {
+            margin-top: 20px;
+            padding: 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="splineCanvas" width="1200" height="600"></canvas>
+<input type="file" id="backgroundPicker" accept="image/*">
+<button id="exportBtn">Export to PNG</button>
+
+<script>
+    const canvas = document.getElementById('splineCanvas');
+    const ctx = canvas.getContext('2d');
+    const exportBtn = document.getElementById('exportBtn');
+    const backgroundPicker = document.getElementById('backgroundPicker');
+
+    let points = []; // Array to store control points
+    let backgroundImage = null; // Stores the background image
+    let drawingEnded = false; // Flag to track if the drawing is completed
+    let isDragging = false; // Flag to indicate if a point is being dragged
+    let draggedPointIndex = null; // Index of the point being dragged
+
+    // Function to draw the background image
+    function drawBackground() {
+        if (backgroundImage) {
+            ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
+        }
+    }
+
+    // Function to draw all pivot points as square markers
+    function drawPivotMarkers(points) {
+        ctx.fillStyle = 'red'; // Color for the pivot markers
+        points.forEach(point => {
+            ctx.fillRect(point.x - 5, point.y - 5, 10, 10); // Draw a 10x10 square for each pivot point
+        });
+    }
+
+    // Function to draw spline curve
+    function drawSpline(points) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas
+
+        drawBackground(); // Redraw the background first
+        drawPivotMarkers(points); // Draw all pivot markers
+
+        if (points.length < 3) return;
+
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+
+        for (let i = 1; i < points.length - 2; i++) {
+            let xc = (points[i].x + points[i + 1].x) / 2;
+            let yc = (points[i].y + points[i + 1].y) / 2;
+            ctx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
+        }
+        // Curve through the last two points
+        ctx.quadraticCurveTo(
+            points[points.length - 2].x,
+            points[points.length - 2].y,
+            points[points.length - 1].x,
+            points[points.length - 1].y
+        );
+
+        ctx.stroke();
+    }
+
+    // Check if a point is being clicked (for dragging)
+    function getClickedPointIndex(x, y) {
+        const radius = 10; // Detection radius for clicking a point
+        for (let i = 0; i < points.length; i++) {
+            let point = points[i];
+            if (Math.abs(point.x - x) < radius && Math.abs(point.y - y) < radius) {
+                return i; // Return the index of the clicked point
+            }
+        }
+        return null;
+    }
+
+    // Mouse click event to add points or start dragging a point
+    canvas.addEventListener('mousedown', (event) => {
+        const x = event.offsetX;
+        const y = event.offsetY;
+
+        const clickedPointIndex = getClickedPointIndex(x, y);
+
+        if (drawingEnded && clickedPointIndex !== null) {
+            // Start dragging an existing point
+            isDragging = true;
+            draggedPointIndex = clickedPointIndex;
+        } else if (!drawingEnded) {
+            // Add a new point if drawing is not ended
+            points.push({ x, y });
+            drawSpline(points);
+        }
+    });
+
+    // Mouse move event to drag the point
+    canvas.addEventListener('mousemove', (event) => {
+        if (isDragging) {
+            const x = event.offsetX;
+            const y = event.offsetY;
+
+            // Update the position of the dragged point
+            points[draggedPointIndex] = { x, y };
+            drawSpline(points); // Redraw the curve
+        }
+    });
+
+    // Mouse release to stop dragging
+    canvas.addEventListener('mouseup', () => {
+        isDragging = false; // Stop dragging
+        draggedPointIndex = null; // Reset the dragged point index
+    });
+
+    // Double click to end the drawing process
+    canvas.addEventListener('dblclick', () => {
+        drawingEnded = true; // Stop the drawing process
+    });
+
+    // Reset canvas on right-click (context menu)
+    canvas.addEventListener('contextmenu', (event) => {
+        event.preventDefault();
+        points = [];
+        drawingEnded = false; // Reset drawing state
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawBackground(); // Redraw the background after clearing
+    });
+
+    // Handle background image selection
+    backgroundPicker.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const img = new Image();
+        const reader = new FileReader();
+
+        reader.onload = function(e) {
+            img.src = e.target.result;
+            img.onload = function() {
+                backgroundImage = img;
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                drawBackground(); // Draw background when image is loaded
+                drawSpline(points); // Redraw existing points and curves
+            };
+        };
+
+        reader.readAsDataURL(file);
+    });
+
+    // Export canvas to PNG
+    exportBtn.addEventListener('click', () => {
+        const image = canvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.href = image;
+        link.download = 'spline_curve.png';
+        link.click();
+    });
+</script>
+
+</body>
+</html>
